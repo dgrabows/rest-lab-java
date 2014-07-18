@@ -2,6 +2,7 @@ package lab.repository;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -24,6 +25,7 @@ public class Entity<S, T> {
         return id;
     }
 
+    @JsonUnwrapped
     public T getValue() {
         return value;
     }
