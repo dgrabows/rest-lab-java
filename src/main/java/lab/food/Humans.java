@@ -4,6 +4,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
+import lab.repository.Entity;
 import lab.repository.InMemoryRepository;
 import lab.repository.LongIdGenerator;
 import lab.support.PATCH;
@@ -31,9 +32,8 @@ public class Humans {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response create(@Context UriInfo uriInfo, Human.Builder humanBuilder) {
-        humanBuilder.setId(null);
-        Human human = humanRepository.add(humanBuilder.build());
+    public Response create(@Context UriInfo uriInfo, Human humanValue) {
+        Entity<Long, Human> human = humanRepository.add(humanValue);
         URI location = uriInfo.getAbsolutePathBuilder().path("{id}").build(human.getId());
         return Response.created(location).entity(human).build();
     }
@@ -41,7 +41,7 @@ public class Humans {
     @GET
     @Path("/{id}")
     public Response retrieve(@PathParam("id") long id) {
-        Optional<Human> human = humanRepository.find(id);
+        Optional<Entity<Long, Human>> human = humanRepository.find(id);
         if (human.isPresent()) {
             return Response.ok(human.get()).build();
         } else {
@@ -51,25 +51,23 @@ public class Humans {
 
     @PUT
     @Path("/{id}")
-    public Response createOrReplace(@PathParam("id") long id, Human.Builder humanBuilder) {
-        if (id == humanBuilder.getId()) {
-            return Response.ok(humanRepository.addOrReplace(humanBuilder.build())).build();
+    public Response replace(@PathParam("id") long id, Human humanValue) {
+        Entity<Long, Human> human = Entity.of(id, humanValue);
+        if (humanRepository.replace(human)) {
+            return Response.ok(human).build();
         } else {
-            return Response.status(Status.BAD_REQUEST).build();
+            return Response.status(Status.NOT_FOUND).build();
         }
     }
 
     @PATCH
     @Path("/{id}")
-    public Response update(@PathParam("id") long id, Human.Builder updates) {
-        if (updates.getId() != null && id != updates.getId()) {
-            return Response.status(Status.BAD_REQUEST).build();
-        }
-        Optional<Human> currentState = humanRepository.find(id);
+    public Response update(@PathParam("id") long id, Human updates) {
+        Optional<Entity<Long, Human>> currentState = humanRepository.find(id);
         if (!currentState.isPresent()) {
             return Response.status(Status.NOT_FOUND).build();
         }
-        Human updatedState = Human.builder(currentState.get()).merge(updates).build();
+        Entity<Long, Human> updatedState = Entity.of(id, currentState.get().getValue().mergeIn(updates));
         if (humanRepository.replace(updatedState)) {
             return Response.ok(updatedState).build();
         } else {
@@ -88,9 +86,9 @@ public class Humans {
     @GET
     @Path("/{humanId}/favorites")
     public Response getFavorites(@PathParam("humanId") long humanId) {
-        Optional<Human> human = humanRepository.find(humanId);
+        Optional<Entity<Long, Human>> human = humanRepository.find(humanId);
         if (human.isPresent()) {
-            return Response.ok(human.get().getFavorites()).build();
+            return Response.ok(human.get().getValue().getFavorites()).build();
         } else {
             return Response.status(Status.NOT_FOUND).build();
         }
@@ -99,9 +97,9 @@ public class Humans {
     @GET
     @Path("/{humanId}/favorites/{mealId}")
     public Response getFavorite(@PathParam("humanId") long humanId, @PathParam("mealId") long mealId) {
-        Optional<Human> human = humanRepository.find(humanId);
+        Optional<Entity<Long, Human>> human = humanRepository.find(humanId);
         Favorite favorite = Favorite.of(mealId);
-        if (human.isPresent() && human.get().getFavorites().contains(favorite)) {
+        if (human.isPresent() && human.get().getValue().getFavorites().contains(favorite)) {
             return Response.ok(favorite).build();
         } else {
             return Response.status(Status.NOT_FOUND).build();
@@ -114,13 +112,15 @@ public class Humans {
     @PUT
     @Path("/{humanId}/favorites/{mealId}")
     public Response addFavorite(@PathParam("humanId") long humanId, @PathParam("mealId") long mealId) {
-        Optional<Human> human = humanRepository.find(humanId);
+        Optional<Entity<Long, Human>> human = humanRepository.find(humanId);
         if (human.isPresent()) {
-            Human currentState = human.get();
-            Iterable<Favorite> newFavorites = Iterables.concat(currentState.getFavorites(), ImmutableSet.of(Favorite.of(mealId)));
-            Human updatedState = Human.builder(currentState).setFavorites(newFavorites).build();
+            Human currentValue = human.get().getValue();
+            Favorite newFavorite = Favorite.of(mealId);
+            Iterable<Favorite> newFavorites = Iterables.concat(currentValue.getFavorites(), ImmutableSet.of(newFavorite));
+            Human updatedValue = Human.builder(currentValue).setFavorites(newFavorites).build();
+            Entity<Long, Human> updatedState = Entity.of(humanId, updatedValue);
             if (humanRepository.replace(updatedState)) {
-                return Response.ok(updatedState).build();
+                return Response.ok(newFavorite).build();
             } else {
                 // the human was deleted in between the retrieval and update
                 return Response.status(Status.NOT_FOUND).build();
@@ -136,12 +136,13 @@ public class Humans {
     @DELETE
     @Path("/{humanId}/favorites/{mealId}")
     public Response deleteFavorite(@PathParam("humanId") long humanId, @PathParam("mealId") long mealId) {
-        Optional<Human> human = humanRepository.find(humanId);
+        Optional<Entity<Long, Human>> human = humanRepository.find(humanId);
         if (human.isPresent()) {
-            Human currentState = human.get();
+            Human currentValue = human.get().getValue();
             Favorite favoriteToDelete = Favorite.of(mealId);
-            Iterable<Favorite> newFavorites = Sets.difference(currentState.getFavorites(), ImmutableSet.of(favoriteToDelete));
-            Human updatedState = Human.builder(currentState).setFavorites(newFavorites).build();
+            Iterable<Favorite> newFavorites = Sets.difference(currentValue.getFavorites(), ImmutableSet.of(favoriteToDelete));
+            Human updatedValue = Human.builder(currentValue).setFavorites(newFavorites).build();
+            Entity<Long, Human> updatedState = Entity.of(humanId, updatedValue);
             if (humanRepository.replace(updatedState)) {
                 return Response.noContent().build();
             } else {

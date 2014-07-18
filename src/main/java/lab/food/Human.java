@@ -3,20 +3,16 @@ package lab.food;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableSet;
-import lab.repository.Identifiable;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-public final class Human implements Identifiable<Long, Human> {
-    private final Long id;
+public final class Human {
     private final String name;
     private final ImmutableSet<Favorite> favorites;
 
     @JsonCreator
-    public Human(@JsonProperty("id") Long id,
-                 @JsonProperty("name") String name,
+    public Human(@JsonProperty("name") String name,
                  @JsonProperty("favorites") Iterable<Favorite> favorites) {
-        this.id = id;
         this.name = checkNotNull(name);
         this.favorites = favorites == null ? ImmutableSet.<Favorite>of() : ImmutableSet.copyOf(favorites);
     }
@@ -30,7 +26,6 @@ public final class Human implements Identifiable<Long, Human> {
     }
 
     public static class Builder {
-        private Long id;
         private String name;
         private ImmutableSet<Favorite> favorites;
 
@@ -38,18 +33,8 @@ public final class Human implements Identifiable<Long, Human> {
         }
 
         public Builder(Human humanToCopy) {
-            this.id = humanToCopy.id;
             this.name = humanToCopy.name;
             this.favorites = humanToCopy.favorites;
-        }
-
-        public Long getId() {
-            return this.id;
-        }
-
-        public Builder setId(Long id) {
-            this.id = id;
-            return this;
         }
 
         public Builder setName(String name) {
@@ -62,7 +47,7 @@ public final class Human implements Identifiable<Long, Human> {
             return this;
         }
 
-        public Builder merge(Builder updates) {
+        public Builder merge(Human updates) {
             if (updates.name != null) {
                 this.name = updates.name;
             }
@@ -73,17 +58,12 @@ public final class Human implements Identifiable<Long, Human> {
         }
 
         public Human build() {
-            return new Human(id, name, favorites);
+            return new Human(name, favorites);
         }
     }
 
-    @Override
-    public Human withId(Long id) {
-        return builder(this).setId(id).build();
-    }
-
-    public Long getId() {
-        return id;
+    public Human mergeIn(Human updates) {
+        return builder(this).merge(updates).build();
     }
 
     public String getName() {
@@ -101,13 +81,16 @@ public final class Human implements Identifiable<Long, Human> {
 
         Human human = (Human) o;
 
-        if (id != null ? !id.equals(human.id) : human.id != null) return false;
+        if (!favorites.equals(human.favorites)) return false;
+        if (!name.equals(human.name)) return false;
 
         return true;
     }
 
     @Override
     public int hashCode() {
-        return id != null ? id.hashCode() : 0;
+        int result = name.hashCode();
+        result = 31 * result + favorites.hashCode();
+        return result;
     }
 }
